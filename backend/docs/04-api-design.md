@@ -21,7 +21,18 @@
 - `GET /api/v1/projects/{id}`: Get a specific project
 - `PATCH /api/v1/projects/{id}`: Update a project
 - `DELETE /api/v1/projects/{id}`: Delete a project
+- `POST /api/v1/projects/{project_id}/documents`: Upload a document
+- `GET /api/v1/projects/{project_id}/documents`: List documents
+
+### Documents (Milestone 2 & Sprint 4)
+- `GET /api/v1/documents/{id}`: Fetch document metadata
+- `DELETE /api/v1/documents/{id}`: Delete document and stored file
+- `POST /api/v1/projects/{project_id}/documents/{document_id}/process`: Process and extract raw text from a document
+
+### Search & Indexing (RAG Pipeline)
+- `POST /api/v1/projects/{project_id}/documents/{document_id}/index`: Run the RAG indexing pipeline on a document
+- `POST /api/v1/projects/{project_id}/search`: Perform semantic search against indexed documents
+- `POST /api/v1/projects/{project_id}/chat`: Ask a natural language question about the project's documents
 
 ### Planned (Future Sprints)
-- `POST /api/v1/projects/{id}/documents`
 - `POST /api/v1/projects/{id}/chat`
