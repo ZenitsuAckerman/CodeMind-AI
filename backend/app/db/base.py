@@ -9,3 +9,4 @@ class Base(DeclarativeBase):
 
 # Import all models here so Alembic can find them in its env.py
 from app.models.user import User  # noqa
+from app.models.project import Project  # noqa
