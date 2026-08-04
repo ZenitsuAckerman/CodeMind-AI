@@ -7,9 +7,15 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Import our settings and Base metadata
 from app.config.settings import settings
 from app.db.base import Base
+
+# Import all models to register with Base.metadata
+from app.models.user import User  # noqa
+from app.models.project import Project  # noqa
+from app.models.document import Document  # noqa
+from app.models.document_content import DocumentContent  # noqa
+from app.models.document_chunk import DocumentChunk  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
