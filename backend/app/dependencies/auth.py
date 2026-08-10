@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
+
 from app.config.settings import settings
 from app.db.session import get_db
 from app.models.user import User
@@ -12,7 +13,7 @@ from app.schemas.token import TokenPayload
 from app.repositories.user_repository import user_repository
 
 reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/auth/login"
+    tokenUrl=f"{settings.API_V1_STR}/auth/token"
 )
 
 async def get_current_user(
@@ -34,3 +35,5 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return user
+
+
