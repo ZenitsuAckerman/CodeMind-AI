@@ -67,22 +67,27 @@ async def db_session():
     await connection.close()
     await test_engine.dispose()
 
-@pytest_asyncio.fixture()
-async def client(db_session: AsyncSession):
+@pytest.fixture()
+def app_with_db_override(db_session: AsyncSession):
     """
-    Return an HTTPX AsyncClient configured to hit the FastAPI app,
-    with the get_db dependency overridden to yield the isolated test session.
+    Provides the FastAPI app with the database dependency overridden.
+    Ensures deterministic setup and teardown of the override.
     """
     async def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
-        
-    # Clear overrides
+    yield app
     app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture()
+async def client(app_with_db_override):
+    """
+    Return an HTTPX AsyncClient configured to hit the FastAPI app,
+    with the get_db dependency overridden to yield the isolated test session.
+    """
+    async with AsyncClient(transport=ASGITransport(app=app_with_db_override), base_url="http://test") as c:
+        yield c
 
 
 # --- TEST USER & AUTH SETUP ---
@@ -109,10 +114,11 @@ async def test_user_token(client: AsyncClient, test_user: dict):
     return response.json()["access_token"]
 
 @pytest_asyncio.fixture()
-async def auth_client(client: AsyncClient, test_user_token: str):
+async def auth_client(test_user_token: str, app_with_db_override):
     """Return an HTTPX client pre-authenticated as the test user."""
-    client.headers["Authorization"] = f"Bearer {test_user_token}"
-    return client
+    async with AsyncClient(transport=ASGITransport(app=app_with_db_override), base_url="http://test") as c:
+        c.headers["Authorization"] = f"Bearer {test_user_token}"
+        yield c
 
 @pytest_asyncio.fixture()
 async def test_user_b(client: AsyncClient):
@@ -126,19 +132,121 @@ async def test_user_b(client: AsyncClient):
     return payload
 
 @pytest_asyncio.fixture()
-async def auth_client_b(test_user_b: dict, db_session: AsyncSession):
+async def auth_client_b(test_user_b: dict, app_with_db_override):
     """Return an HTTPX client pre-authenticated as User B."""
-    async def override_get_db():
-        yield db_session
-        
-    app.dependency_overrides[get_db] = override_get_db
-    
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with AsyncClient(transport=ASGITransport(app=app_with_db_override), base_url="http://test") as c:
         token_resp = await c.post(
             f"{settings.API_V1_STR}/auth/token",
             data={"username": test_user_b["email"], "password": test_user_b["password"]}
         )
         c.headers["Authorization"] = f"Bearer {token_resp.json()['access_token']}"
         yield c
-        
-    app.dependency_overrides.clear()
+
+# --- TEST PROJECT SETUP ---
+
+@pytest_asyncio.fixture()
+async def test_project(auth_client: AsyncClient):
+    """Create and return a standard test project for User A."""
+    payload = {
+        "name": "Test Project A",
+        "description": "Project owned by User A"
+    }
+    response = await auth_client.post(f"{settings.API_V1_STR}/projects/", json=payload)
+    return response.json()
+
+@pytest_asyncio.fixture()
+async def test_project_b(auth_client_b: AsyncClient):
+    """Create and return a standard test project for User B."""
+    payload = {
+        "name": "Test Project B",
+        "description": "Project owned by User B"
+    }
+    response = await auth_client_b.post(f"{settings.API_V1_STR}/projects/", json=payload)
+    return response.json()
+
+# --- TEST DOCUMENT & RAG SETUP ---
+
+@pytest.fixture
+def sample_text_content():
+    return b"CodeMind automated testing.\nThis document belongs to the test project.\nRetrieval should preserve this content."
+
+@pytest.fixture
+def sample_file(sample_text_content):
+    return {"file": ("test_doc.txt", sample_text_content, "text/plain")}
+
+@pytest.fixture
+def invalid_file():
+    return {"file": ("test_doc.exe", b"binary content", "application/x-msdownload")}
+
+@pytest_asyncio.fixture()
+async def test_document(auth_client: AsyncClient, test_project: dict, sample_file: dict):
+    """Uploads a test document and cleans it up after."""
+    data = {"title": "Test Document"}
+    response = await auth_client.post(
+        f"{settings.API_V1_STR}/projects/{test_project['id']}/documents",
+        data=data,
+        files=sample_file
+    )
+    assert response.status_code == 201
+    doc = response.json()
+    yield doc
+    await auth_client.delete(f"{settings.API_V1_STR}/documents/{doc['id']}")
+
+@pytest_asyncio.fixture()
+async def processed_document(auth_client: AsyncClient, test_project: dict, test_document: dict):
+    """Returns a document that has been processed."""
+    response = await auth_client.post(
+        f"{settings.API_V1_STR}/projects/{test_project['id']}/documents/{test_document['id']}/process"
+    )
+    assert response.status_code == 202
+    
+    get_response = await auth_client.get(f"{settings.API_V1_STR}/documents/{test_document['id']}")
+    return get_response.json()
+
+@pytest_asyncio.fixture()
+async def indexed_document(auth_client: AsyncClient, test_project: dict, processed_document: dict):
+    """Returns a document that has been indexed."""
+    response = await auth_client.post(
+        f"{settings.API_V1_STR}/projects/{test_project['id']}/documents/{processed_document['id']}/index"
+    )
+    assert response.status_code == 202
+    
+    get_response = await auth_client.get(f"{settings.API_V1_STR}/documents/{processed_document['id']}")
+    return get_response.json()
+
+@pytest_asyncio.fixture()
+async def indexed_project_a_data(auth_client: AsyncClient, test_project: dict):
+    """Creates specific indexed documents for RAG retrieval testing in Project A."""
+    docs = []
+    contents = [
+        b"CodeMind uses PostgreSQL to store users and projects.",
+        b"CodeMind uses Qdrant for vector similarity search.",
+        b"OAuth2PasswordBearer is used for authentication."
+    ]
+    for i, content in enumerate(contents):
+        file = {"file": (f"doc_{i}.txt", content, "text/plain")}
+        data = {"title": f"Doc {i}"}
+        resp = await auth_client.post(f"{settings.API_V1_STR}/projects/{test_project['id']}/documents", data=data, files=file)
+        doc = resp.json()
+        await auth_client.post(f"{settings.API_V1_STR}/projects/{test_project['id']}/documents/{doc['id']}/process")
+        await auth_client.post(f"{settings.API_V1_STR}/projects/{test_project['id']}/documents/{doc['id']}/index")
+        docs.append(doc)
+    
+    yield docs
+    
+    for doc in docs:
+        await auth_client.delete(f"{settings.API_V1_STR}/documents/{doc['id']}")
+
+@pytest_asyncio.fixture()
+async def indexed_project_b_data(auth_client_b: AsyncClient, test_project_b: dict):
+    """Creates specific indexed documents for RAG retrieval testing in Project B."""
+    file = {"file": ("secret.txt", b"This is private information belonging to another project.", "text/plain")}
+    data = {"title": "Secret B Doc"}
+    resp = await auth_client_b.post(f"{settings.API_V1_STR}/projects/{test_project_b['id']}/documents", data=data, files=file)
+    doc = resp.json()
+    await auth_client_b.post(f"{settings.API_V1_STR}/projects/{test_project_b['id']}/documents/{doc['id']}/process")
+    await auth_client_b.post(f"{settings.API_V1_STR}/projects/{test_project_b['id']}/documents/{doc['id']}/index")
+    
+    yield [doc]
+    
+    await auth_client_b.delete(f"{settings.API_V1_STR}/documents/{doc['id']}")

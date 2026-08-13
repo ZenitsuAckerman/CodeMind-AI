@@ -58,9 +58,9 @@ class QdrantService:
         """
         Retrieves the most semantically similar chunks for a specific project.
         """
-        search_result = self.client.search(
+        query_response = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=Filter(
                 must=[
                     FieldCondition(
@@ -73,7 +73,7 @@ class QdrantService:
         )
         
         results = []
-        for hit in search_result:
+        for hit in query_response.points:
             results.append({
                 "chunk_id": hit.id,
                 "score": hit.score,
