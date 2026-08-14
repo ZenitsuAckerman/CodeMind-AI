@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import List
 from uuid import UUID
 from fastapi import UploadFile, HTTPException, status
@@ -8,6 +9,8 @@ from app.models.document import Document, DocumentStatus
 from app.repositories.document_repository import document_repository
 from app.services.project_service import ProjectService
 from app.services.storage_service import StorageService
+
+logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = {
     ".pdf", ".docx", ".txt", ".md", ".java", 
@@ -75,6 +78,15 @@ class DocumentService:
     @staticmethod
     async def delete_document(db: AsyncSession, document_id: UUID, user_id: UUID) -> None:
         doc = await DocumentService.get_document(db, document_id, user_id)
+        
+        # Delete vectors from Qdrant first
+        from app.services.rag.qdrant_service import qdrant_service
+        try:
+            qdrant_service.delete_document_vectors(document_id=doc.id, project_id=doc.project_id)
+        except Exception as e:
+            logger.error(f"Failed to delete Qdrant vectors for document {doc.id}: {e}")
+            raise # Fail the deletion if vectors cannot be removed to prevent orphaned data
+
         # Delete file from local storage
         StorageService.delete_file(doc.file_path)
         # Delete from DB

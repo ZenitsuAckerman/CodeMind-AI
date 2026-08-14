@@ -160,13 +160,92 @@ async def test_delete_document_success(auth_client: AsyncClient, test_project: d
     del_resp = await auth_client.delete(f"{API_STR}/documents/{doc['id']}")
     assert del_resp.status_code == 204
     
-    # Verify it is gone
+    # Verify it is gone from DB
     get_resp = await auth_client.get(f"{API_STR}/documents/{doc['id']}")
     assert get_resp.status_code == 404
     
-    # NOTE: The architecture audit identified a known issue where deleting a document
-    # does NOT remove the orphaned Qdrant vectors. We document it here but do not 
-    # fail the test for it since it's an existing limitation of the application.
+    # We didn't index this doc, so Qdrant check is trivial here. Let's rely on the dedicated tests below.
+
+@pytest.mark.asyncio
+async def test_delete_document_removes_qdrant_vectors(auth_client: AsyncClient, test_project: dict, indexed_document: dict):
+    from app.services.rag.qdrant_service import qdrant_service
+    from qdrant_client.http.models import Filter, FieldCondition, MatchValue
+    
+    doc_id = indexed_document["id"]
+    proj_id = test_project["id"]
+    
+    # Verify vectors exist in Qdrant first
+    res = qdrant_service.client.scroll(
+        collection_name=qdrant_service.collection_name,
+        scroll_filter=Filter(must=[FieldCondition(key="document_id", match=MatchValue(value=str(doc_id)))]),
+        limit=10
+    )
+    assert len(res[0]) > 0, "Vectors should exist before deletion"
+    
+    # Delete document
+    del_resp = await auth_client.delete(f"{API_STR}/documents/{doc_id}")
+    assert del_resp.status_code == 204
+    
+    # Verify vectors are gone
+    res_after = qdrant_service.client.scroll(
+        collection_name=qdrant_service.collection_name,
+        scroll_filter=Filter(must=[FieldCondition(key="document_id", match=MatchValue(value=str(doc_id)))]),
+        limit=10
+    )
+    assert len(res_after[0]) == 0, "Vectors should be deleted"
+
+@pytest.mark.asyncio
+async def test_deleted_document_invisible_to_rag(auth_client: AsyncClient, test_project: dict, indexed_project_a_data: list):
+    # Retrieve a query that we know matches Document 0
+    doc_to_delete = indexed_project_a_data[0]
+    
+    search_payload = {"query": "PostgreSQL", "limit": 5}
+    res_before = await auth_client.post(f"{API_STR}/projects/{test_project['id']}/search", json=search_payload)
+    assert res_before.status_code == 200
+    assert any(chunk["document_id"] == doc_to_delete["id"] for chunk in res_before.json()["results"]), "Chunk must be found before deletion"
+    
+    # Delete Document 0
+    del_resp = await auth_client.delete(f"{API_STR}/documents/{doc_to_delete['id']}")
+    assert del_resp.status_code == 204
+    
+    # RAG Search again
+    res_after = await auth_client.post(f"{API_STR}/projects/{test_project['id']}/search", json=search_payload)
+    assert res_after.status_code == 200
+    assert not any(chunk["document_id"] == doc_to_delete["id"] for chunk in res_after.json()["results"]), "Deleted chunk must not be returned"
+
+@pytest.mark.asyncio
+async def test_delete_document_cross_document_isolation(auth_client: AsyncClient, test_project: dict, indexed_project_a_data: list):
+    from app.services.rag.qdrant_service import qdrant_service
+    from qdrant_client.http.models import Filter, FieldCondition, MatchValue
+    
+    doc_a = indexed_project_a_data[0]
+    doc_b = indexed_project_a_data[1]
+    
+    # Delete Document A
+    await auth_client.delete(f"{API_STR}/documents/{doc_a['id']}")
+    
+    # Verify Document B vectors remain
+    res_b = qdrant_service.client.scroll(
+        collection_name=qdrant_service.collection_name,
+        scroll_filter=Filter(must=[FieldCondition(key="document_id", match=MatchValue(value=str(doc_b['id'])))]),
+        limit=10
+    )
+    assert len(res_b[0]) > 0, "Document B vectors must remain intact"
+
+@pytest.mark.asyncio
+async def test_delete_document_qdrant_failure_aborts_db_deletion(auth_client: AsyncClient, test_project: dict, indexed_document: dict):
+    from unittest.mock import patch
+    doc_id = indexed_document["id"]
+    
+    # Mock QdrantService to throw an error
+    with patch("app.services.rag.qdrant_service.QdrantService.delete_document_vectors", side_effect=Exception("Simulated Qdrant failure")):
+        import pytest
+        with pytest.raises(Exception, match="Simulated Qdrant failure"):
+            await auth_client.delete(f"{API_STR}/documents/{doc_id}")
+        
+    # Verify the document STILL exists in Postgres because the deletion was aborted
+    get_resp = await auth_client.get(f"{API_STR}/documents/{doc_id}")
+    assert get_resp.status_code == 200
 
 @pytest.mark.asyncio
 async def test_delete_document_cross_user(auth_client_b: AsyncClient, test_document: dict):

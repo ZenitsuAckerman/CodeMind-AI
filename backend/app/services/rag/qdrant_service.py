@@ -84,5 +84,26 @@ class QdrantService:
             
         return results
 
+    def delete_document_vectors(self, document_id: uuid.UUID, project_id: uuid.UUID):
+        """
+        Deletes all vector chunks associated with a specific document from Qdrant.
+        Filters by both document_id and project_id to ensure complete project isolation.
+        """
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=Filter(
+                must=[
+                    FieldCondition(
+                        key="document_id",
+                        match=MatchValue(value=str(document_id))
+                    ),
+                    FieldCondition(
+                        key="project_id",
+                        match=MatchValue(value=str(project_id))
+                    )
+                ]
+            )
+        )
+
 # Singleton instance
 qdrant_service = QdrantService()

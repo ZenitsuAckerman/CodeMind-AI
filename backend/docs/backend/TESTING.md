@@ -73,13 +73,15 @@ The document testing suite (`tests/test_documents.py`) provides end-to-end cover
 - **Processing Tests**: Validates the transition to `PROCESSED` status and the creation of `DocumentContent` using local text extraction.
 - **Indexing Tests**: Validates chunking, embedding generation using local Hugging Face sentence transformers, and insertion into Qdrant.
 - **Ownership Tests**: Strict isolation between User A and User B is tested at every step (list, get, process, index, delete).
-- **File Cleanup**: Uploaded test files are cleaned up either via explicit teardown fixtures or by successfully hitting the `DELETE` endpoint.
+- **File Cleanup**: Uploaded test files are cleaned up either via explicit teardown fixtures or by successfully hitting the `DELETE` endpoint. Document deletion now properly cascades to remove associated vectors from Qdrant.
 
 ### Qdrant Testing Strategy
 
 To test the indexing pipeline deterministically without requiring a real external Qdrant instance, the suite leverages Qdrant's `:memory:` storage backend. When the application initializes the `QdrantService`, it seamlessly uses this in-memory database during tests.
 
-- **Qdrant Orphaned Vectors**: The architecture currently has a known limitation where deleting a document via `DELETE /api/v1/documents/{id}` removes the PostgreSQL rows and local files, but **does not** delete the associated vectors from Qdrant. This behavior is intentionally preserved during tests to match the current production implementation.
+### Known Limitations
+
+*(No current major architectural limitations known in the testing suite.)*
 
 ## RAG Testing
 
