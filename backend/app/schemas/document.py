@@ -13,6 +13,9 @@ class DocumentBase(BaseModel):
 class DocumentResponse(DocumentBase):
     id: uuid.UUID
     project_id: uuid.UUID
+    source_type: str
+    repository_id: uuid.UUID | None = None
+    repo_file_path: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -68,7 +68,10 @@ class IndexingService:
                     "document_id": doc.id,
                     "content": chunk_text,
                     "chunk_index": idx,
-                    "embedding": embeddings[idx]
+                    "embedding": embeddings[idx],
+                    "source_type": doc.source_type,
+                    "repository_id": str(doc.repository_id) if doc.repository_id else None,
+                    "repo_file_path": doc.repo_file_path
                 })
                 
             # Add to PostgreSQL

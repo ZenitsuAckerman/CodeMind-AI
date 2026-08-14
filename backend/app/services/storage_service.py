@@ -37,6 +37,32 @@ class StorageService:
         return stored_filename, str(file_path), file_size, hasher.hexdigest()
 
     @staticmethod
+    def save_local_file(source_path: str, original_filename: str) -> tuple[str, str, int, str]:
+        """
+        Saves a local file to storage.
+        Returns a tuple of (stored_filename, file_path, file_size, sha256_hash).
+        """
+        StorageService._ensure_storage_dir()
+
+        # Generate unique filename
+        stored_filename = f"{uuid.uuid4()}{os.path.splitext(original_filename)[1]}"
+        file_path = STORAGE_DIR / stored_filename
+
+        import shutil
+        import hashlib
+
+        # Save file chunks and calculate hash
+        file_size = 0
+        hasher = hashlib.sha256()
+        with open(source_path, "rb") as source, open(file_path, "wb") as dest:
+            while chunk := source.read(1024 * 1024):
+                dest.write(chunk)
+                hasher.update(chunk)
+                file_size += len(chunk)
+
+        return stored_filename, str(file_path), file_size, hasher.hexdigest()
+
+    @staticmethod
     def delete_file(file_path: str) -> None:
         """
         Deletes a file from local storage if it exists.

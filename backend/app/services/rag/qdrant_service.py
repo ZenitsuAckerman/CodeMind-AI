@@ -43,7 +43,10 @@ class QdrantService:
                         "project_id": str(data["project_id"]),
                         "document_id": str(data["document_id"]),
                         "content": data["content"],
-                        "chunk_index": data["chunk_index"]
+                        "chunk_index": data["chunk_index"],
+                        "source_type": data.get("source_type"),
+                        "repository_id": data.get("repository_id"),
+                        "repo_file_path": data.get("repo_file_path")
                     }
                 )
             )
@@ -79,7 +82,10 @@ class QdrantService:
                 "score": hit.score,
                 "document_id": hit.payload["document_id"],
                 "content": hit.payload["content"],
-                "chunk_index": hit.payload["chunk_index"]
+                "chunk_index": hit.payload["chunk_index"],
+                "source_type": hit.payload.get("source_type"),
+                "repository_id": hit.payload.get("repository_id"),
+                "repo_file_path": hit.payload.get("repo_file_path")
             })
             
         return results

@@ -16,6 +16,7 @@ from app.models.project import Project  # noqa
 from app.models.document import Document  # noqa
 from app.models.document_content import DocumentContent  # noqa
 from app.models.document_chunk import DocumentChunk  # noqa
+from app.models.repository import Repository  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

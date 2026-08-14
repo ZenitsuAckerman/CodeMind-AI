@@ -28,9 +28,14 @@ class Document(Base):
     sha256_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[DocumentStatus] = mapped_column(Enum(DocumentStatus), default=DocumentStatus.UPLOADED, nullable=False)
     
+    source_type: Mapped[str] = mapped_column(String(50), default="upload", nullable=False)
+    repository_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True)
+    repo_file_path: Mapped[str] = mapped_column(String(1024), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     project = relationship("Project", back_populates="documents")
+    repository = relationship("Repository", back_populates="documents")
     content = relationship("DocumentContent", back_populates="document", uselist=False, cascade="all, delete-orphan")

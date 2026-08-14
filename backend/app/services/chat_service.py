@@ -34,9 +34,13 @@ class ChatService:
         # 2. Map citations early
         citations = []
         for chunk in retrieved_chunks:
+            repo_id = chunk.get("repository_id")
             citations.append(Citation(
                 document_id=uuid.UUID(chunk["document_id"]),
-                chunk_index=chunk["chunk_index"]
+                chunk_index=chunk["chunk_index"],
+                source_type=chunk.get("source_type", "upload"),
+                repository_id=uuid.UUID(repo_id) if repo_id else None,
+                repo_file_path=chunk.get("repo_file_path")
             ))
             
         # 3. Build the LLM Prompt

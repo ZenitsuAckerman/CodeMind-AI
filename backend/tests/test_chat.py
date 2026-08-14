@@ -24,6 +24,11 @@ async def test_chat_success(auth_client: AsyncClient, test_project: dict, indexe
     assert "citations" in data
     assert len(data["citations"]) > 0
     
+    citation = data["citations"][0]
+    assert citation["source_type"] == "upload"
+    assert citation["repository_id"] is None
+    assert citation["repo_file_path"] is None
+
     mock_gemini.generate_answer.assert_called_once()
     called_prompt = mock_gemini.generate_answer.call_args[0][0]
     assert "PostgreSQL" in called_prompt

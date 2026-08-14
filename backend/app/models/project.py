@@ -19,3 +19,4 @@ class Project(Base):
     # Relationships
     owner = relationship("User", back_populates="projects")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
+    repositories = relationship("Repository", back_populates="project", cascade="all, delete-orphan")

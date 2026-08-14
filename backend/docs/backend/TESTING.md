@@ -40,6 +40,18 @@ Run all tests:
 pytest -v
 ```
 
+## Current Test Coverage
+
+- `tests/test_auth.py`
+- `tests/test_users.py`
+- `tests/test_projects.py`
+- `tests/test_documents.py`
+- `tests/test_rag.py`
+- `tests/test_chat.py`
+- `tests/test_github_ingestion.py`
+
+Total tests: 59 passed.
+
 Run specific test files:
 ```bash
 pytest tests/test_projects.py -v

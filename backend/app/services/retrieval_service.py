@@ -30,7 +30,13 @@ class RetrievalService:
         # 3. Keyword Search (BM25) -> Top 20
         # First, fetch all chunks for this project from DB
         stmt = (
-            select(DocumentChunk, Document.id.label("doc_id"))
+            select(
+                DocumentChunk,
+                Document.id.label("doc_id"),
+                Document.source_type,
+                Document.repository_id,
+                Document.repo_file_path
+            )
             .join(DocumentContent, DocumentChunk.document_content_id == DocumentContent.id)
             .join(Document, DocumentContent.document_id == Document.id)
             .where(Document.project_id == project_id)
@@ -39,13 +45,16 @@ class RetrievalService:
         rows = result.all()
         
         db_chunks = []
-        for chunk, doc_id in rows:
+        for chunk, doc_id, source_type, repository_id, repo_file_path in rows:
             db_chunks.append({
                 "chunk_id": str(chunk.id),
                 "document_id": str(doc_id),
                 "project_id": str(project_id),
                 "content": chunk.content,
-                "chunk_index": chunk.chunk_index
+                "chunk_index": chunk.chunk_index,
+                "source_type": source_type,
+                "repository_id": str(repository_id) if repository_id else None,
+                "repo_file_path": repo_file_path
             })
             
         keyword_results = bm25_service.search(query=query, db_chunks=db_chunks, limit=20)

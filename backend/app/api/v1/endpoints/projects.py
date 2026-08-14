@@ -15,7 +15,9 @@ from app.services.document_processing_service import DocumentProcessingService
 from app.services.indexing_service import IndexingService
 from app.services.retrieval_service import RetrievalService
 from app.services.chat_service import ChatService
+from app.services.github_service import GithubService
 from app.dependencies.auth import get_current_user
+from app.schemas.repository import RepositoryCreate, RepositoryResponse
 
 router = APIRouter()
 
@@ -148,6 +150,24 @@ async def search_project(
         limit=request.limit
     )
     return SearchResponse(results=results)
+
+@router.post("/{project_id}/github", response_model=RepositoryResponse, status_code=status.HTTP_201_CREATED)
+async def ingest_github_repository(
+    project_id: UUID,
+    repo_in: RepositoryCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Ingests a public GitHub repository into a project.
+    """
+    return await GithubService.ingest_repository(
+        db=db,
+        project_id=project_id,
+        user_id=current_user.id,
+        repository_url=str(repo_in.repository_url),
+        branch=repo_in.branch
+    )
 
 @router.post("/{project_id}/chat", response_model=ChatResponse)
 async def chat_with_project(
